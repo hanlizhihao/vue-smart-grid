@@ -28,8 +28,8 @@
           v-if="showAllMore || rowIndex < showRows"
           :key="seq ? row.rowData[seq] : rowIndex"
           @click="handleRowCheck(row, true)"
-          :class="{checked: row.$checked}"
-          :style="{width: inlineWidth}"
+          :class="[row.$checked ? checked : '', row.backgroundClass]"
+          :style="{width: inlineWidth, backgroundColor: row.backgroundColor}"
           @dblclick="handleDblClick(row)">
           <td v-if="selectable && multiple" class="checkbox-cell">
             <label class="grid-checkbox">
@@ -46,7 +46,7 @@
               :code="cell.code"
               :label="cell.label"
               :valueset="cell.valueset"
-              :template-slot-fn="cell.defaultSlotFn"></smart-grid-cell>
+              :template-slot-fn="cell.defaultSlotFn"/>
           </td>
         </tr>
         <tr v-if="innerData.length >= showRows">
@@ -78,10 +78,11 @@
 <script>
 import EventEmitter from 'event-emitter'
 import '../assets/styles/main.less'
-import {isObject, isEmptyObject} from 'libs/lang'
+import {isObject, isEmptyObject} from '../libs/lang'
 import {config} from './index'
 import SmartGridCell from './SmartGridCell'
 import SmartGridPagination from './SmartGridPagination'
+import Vue from 'vue'
 
 export default {
   name: 'smart-grid',
@@ -138,7 +139,15 @@ export default {
     seq: String,
     eventHub: Object,
     showPages: Number,
-    sizes: Array
+    sizes: Array,
+    backgroundClassCode: {
+      type: String,
+      default: ''
+    },
+    backgroundColorCode: {
+      type: String,
+      default: ''
+    }
   },
   data() {
     return {
@@ -181,11 +190,29 @@ export default {
         innerData = innerData[this.config.dataNode] || []
       }
       this.innerData = innerData.map(row => {
-        return {
+        let innerItem = {
           rowData: row,
+          backgroundColor: '',
+          backgroundClass: '',
           $checked: false,
           cells: this.headers
         }
+        /**
+         * smartgrid支持根据数组数据的其中一个元素的字段来设置背景颜色
+         * @update lizhihan1 2018.03.01
+         * @type {string[]}
+         */
+        let keys = Object.keys(row)
+        if (keys.includes(this.backgroundClassCode)) {
+          innerItem.backgroundClass = row[this.backgroundClassCode]
+        }
+        if (keys.includes(this.backgroundColorCode)) {
+          innerItem.backgroundColor = row[this.backgroundColorCode]
+        }
+        if (row.$checked !== undefined) {
+          innerItem.$checked = row.$checked
+        }
+        return innerItem
       })
       this.empty = !this.innerData.length
     },
@@ -230,7 +257,7 @@ export default {
         style: this.extractHeaderStyle(header),
         defaultSlotFn: header.$scopedSlots ? header.$scopedSlots.default : null
       })
-      header.$destroy()
+      // header.$destroy()
       this.calcExpandCellSize()
     },
     addCustomPagination(pagination) {
@@ -239,13 +266,12 @@ export default {
       }
       pagination.$destroy()
     },
-    setHeaderHidden(header, hidden = false) {
+    setHeaderHidden(header, hidden) {
       const {code} = header
-      this.headers.forEach(item => {
-        if (item.code === code) {
-          item.hidden = hidden
-        }
-      })
+      let index = this.headers.findIndex(item => item.code === code)
+      let newItemHeader = this.headers[index]
+      newItemHeader.hidden = !!hidden
+      Vue.set(this.headers, index, newItemHeader)
       this.calcExpandCellSize()
     },
     extractHeaderStyle(header) {
@@ -340,7 +366,6 @@ export default {
   }
   &.hoverable tbody tr:hover td {
     transition: all .3s;
-    background-color: #f5f4f1;
   }
   &.inline {
     tbody {
